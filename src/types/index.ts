@@ -1,0 +1,103 @@
+export interface Job {
+  id: string;
+  title: string;
+  department: string;
+  location: string;
+  employment_type: "full-time" | "part-time" | "internship";
+  status: "active" | "paused" | "closed";
+  description: string;
+  requirements: string;
+  benefits: string;
+  skills_required: string;
+  experience_level: string;
+  urgency_level: "high" | "medium" | "low";
+  salary: string;
+  num_applicants: number;
+  posted_date: string;
+  deadline: string;
+  created_at: string;
+  updated_at: string;
+  address: string;
+}
+export interface ApplicationData {
+  jobId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  coverLetter: string;
+  cv: File | null;
+}
+export interface Candidate {
+  id: string;
+  full_name: string; // Thay đổi từ 'name' thành 'full_name' để match với database
+  email: string;
+  phone: string;
+  total_applications: number; // Số đơn ứng tuyển
+  latest_application_date: string; // Lần cuối ứng tuyển
+  status: "pending" | "reviewing" | "interviewed" | "accepted" | "rejected"; // Match với Application status
+  job_titles: string[]; // Danh sách các vị trí đã ứng tuyển
+  cv_filename?: string; // CV mới nhất
+  cv_path?: string; // Đường dẫn CV
+  // Có thể thêm các field tùy chọn sau:
+  skills?: string[];
+  experience_level?: string;
+  location?: string;
+  notes?: string[]; // Ghi chú của HR
+  source?: string; // Nguồn ứng tuyển (website, linkedin, etc.)
+}
+
+export interface Interview {
+  id: string;
+  candidateId: string;
+  candidateName: string;
+  position: string;
+  date: Date;
+  interviewer: string;
+  type: "phone" | "video" | "onsite";
+  status: "scheduled" | "completed" | "cancelled";
+  feedback?: string;
+  rating?: number;
+}
+
+export interface DashboardStats {
+  totalJobs: number;
+  activeJobs: number;
+  totalCandidates: number;
+  newApplications: number;
+  interviewsToday: number;
+  hiredThisMonth: number;
+  averageTimeToHire: number;
+  topSkills: { skill: string; count: number }[];
+}
+export interface JobFormData {
+  title: string;
+  department: string;
+  num_applicants: number;
+  location: string;
+  employment_type: "full-time" | "part-time" | "internship";
+  description: string;
+  requirements: string;
+  benefits: string;
+  skills_required: string;
+  experience_level: string;
+  urgency_level: string;
+  salary: string;
+  deadline: string;
+  status: string;
+  address: string;
+}
+export interface Application {
+  id: string;
+  job_id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  coverLetter?: string;
+  cvUrl: string;
+  status: "pending" | "reviewing" | "interviewed" | "accepted" | "rejected";
+  appliedDate: string;
+  cv_filename: string;
+  cv_path: string;
+  job_title: string;
+   submitted_at: string;
+}
