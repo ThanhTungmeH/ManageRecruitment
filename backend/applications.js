@@ -323,7 +323,7 @@ router.get("/candidates", async (req, res) => {
     const candidates = await new Promise((resolve, reject) => {
       req.db.query(
         `
-         SELECT 
+       SELECT 
           CONCAT('candidate-', MD5(a.email)) as id,
           a.full_name,
           a.email,
@@ -360,9 +360,10 @@ router.get("/candidates", async (req, res) => {
         (err, results) => {
           if (err) reject(err);
           else {
-            const processedResults = results.map((row) => ({
+            const processedResults = results.map(row => ({
               ...row,
-              job_titles: row.job_titles ? row.job_titles.split(",") : [],
+              job_titles: row.job_titles_raw ? row.job_titles_raw.split(',') : [],
+              job_titles_raw: undefined // Remove raw field
             }));
             resolve(processedResults);
           }
