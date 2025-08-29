@@ -55,8 +55,7 @@ export interface Interview {
   interviewer: string;
   type: "phone" | "video" | "onsite";
   status: "scheduled" | "completed" | "cancelled";
-  feedback?: string;
-  rating?: number;
+  
 }
 
 export interface DashboardStats {
@@ -100,4 +99,18 @@ export interface Application {
   cv_path: string;
   job_title: string;
    submitted_at: string;
+}
+export interface InterviewScheduleData {
+  candidateId: string;
+  candidateName: string;
+  candidateEmail: string;
+  date: string;
+  time: string;
+  duration: number;
+  type: 'onsite'; // Chỉ hỗ trợ offline
+  interviewer: string;
+  interviewerEmail: string;
+  location: string; // Bắt buộc cho phỏng vấn offline
+  notes?: string;
+  jobTitle?: string;
 }

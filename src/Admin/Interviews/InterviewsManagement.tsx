@@ -160,7 +160,7 @@ const InterviewsManagement: React.FC = () => {
                         </div>
                       </div>
                       
-                      {interview.feedback && (
+                      {/* {interview.feedback && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                           <p className="text-sm text-gray-700"><strong>Phản hồi:</strong> {interview.feedback}</p>
                           {interview.rating && (
@@ -179,7 +179,7 @@ const InterviewsManagement: React.FC = () => {
                             </div>
                           )}
                         </div>
-                      )}
+                      )} */}
                     </div>
                   </div>
                   

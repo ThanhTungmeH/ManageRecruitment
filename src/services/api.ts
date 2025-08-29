@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Application, Candidate, Job, JobFormData } from '../types';
+import { Application, Candidate, InterviewScheduleData, Job, JobFormData, Interview } from '../types';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -8,8 +8,18 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+    withCredentials: true,
 });
-
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Handle unauthorized - có thể redirect to login
+      console.error('Unauthorized access');
+    }
+    return Promise.reject(error);
+  }
+);
 export const jobsAPI = {
   // Lấy tất cả jobs
   getAllJobs: async (): Promise<Job[]> => {
@@ -65,6 +75,15 @@ export const jobsAPI = {
       throw error;
     }
   },
+    // Cập nhật số lượng ứng viên
+  updateApplicantCounts: async (): Promise<void> => {
+    try {
+      await api.post('/jobs/update-applicant-counts');
+    } catch (error) {
+      console.error('Error updating applicant counts:', error);
+      throw error;
+    }
+  },
 };
 // Thêm vào file api.ts hiện có
 
@@ -88,67 +107,229 @@ export const applicationsAPI = {
     return response.json();
   },
   
-  getAllCandidates: async (): Promise<Candidate[]> => {
-    const response = await fetch(`${API_BASE_URL}/applications/candidates`, {
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
+    getAllCandidates: async (): Promise<Candidate[]> => {
+    try {
+      const response = await api.get('/applications/candidates');
+      console.log("API response candidates:", response.data); // Debug log
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching candidates:', error);
       throw new Error('Không thể tải danh sách ứng viên');
     }
-
-    const data = await response.json();
-    console.log("API response candidates:", data); // Debug log
-    return data;
   },
-  // Lấy danh sách đơn ứng tuyển của user
-  getUserApplications: async (): Promise<Application[]> => {
-    const response = await fetch(`${API_BASE_URL}/applications/my-applications`, {
-      credentials: 'include',
-    });
 
-    if (!response.ok) {
+  // Lấy danh sách đơn ứng tuyển của user
+ getUserApplications: async (): Promise<Application[]> => {
+    try {
+      const response = await api.get('/applications/my-applications');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user applications:', error);
       throw new Error('Không thể tải danh sách đơn ứng tuyển');
     }
-
-    return response.json();
   },
+
 
   // Lấy danh sách ứng viên cho job (admin only)
-  getJobApplications: async (jobId: string): Promise<Application[]> => {
-    const response = await fetch(`${API_BASE_URL}/applications/job/${jobId}`, {
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
+   getJobApplications: async (jobId: string): Promise<Application[]> => {
+    try {
+      const response = await api.get(`/applications/job/${jobId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching job applications:', error);
       throw new Error('Không thể tải danh sách ứng viên');
     }
-
-    return response.json();
   },
-
+  // Cập nhật trạng thái ứng tuyển
+  updateApplicationStatus: async (applicationId: string, status: string): Promise<{ message: string }> => {
+    try {
+      const response = await api.put(`/applications/${applicationId}/status`, { status });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating application status:', error);
+      throw new Error('Không thể cập nhật trạng thái ứng tuyển');
+    }
+  },
   // Download CV
-  downloadCV: async (applicationId: string): Promise<void> => {
+   downloadCV: async (applicationId: string): Promise<void> => {
+  try {
+  
+    
     const response = await fetch(`${API_BASE_URL}/applications/download-cv/${applicationId}`, {
+      method: 'GET',
       credentials: 'include',
     });
 
+
+
     if (!response.ok) {
-      throw new Error('Không thể tải file CV');
+      const errorText = await response.text();
+      console.error('Download error response:', errorText);
+      
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+      }
+      
+      throw new Error(errorData.error || 'Không thể tải file CV');
     }
+
+    // Kiểm tra Content-Type
+    const contentType = response.headers.get('Content-Type');
+    console.log('Content-Type:', contentType);
+
+    // Lấy filename từ Content-Disposition header
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = `CV_${applicationId}.pdf`;
+    
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (filenameMatch) {
+        filename = filenameMatch[1].replace(/['"]/g, '');
+      }
+    }
+
+    console.log('Filename:', filename);
 
     // Tạo blob và download
     const blob = await response.blob();
+    console.log('Blob created, size:', blob.size, 'type:', blob.type);
+    
+    if (blob.size === 0) {
+      throw new Error('File rỗng hoặc không tồn tại');
+    }
+
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.style.display = 'none';
     a.href = url;
-
+    a.download = filename;
     
-    a.download = `CV_${applicationId}.pdf`;
     document.body.appendChild(a);
     a.click();
-    window.URL.revokeObjectURL(url);
+    
+    // Cleanup
     document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    console.log('Download completed successfully');
+  } catch (error) {
+    console.error('Error downloading CV:', error);
+    throw error;
+  }
+},
+};
+export const interviewAPI = {
+  // Schedule a new interview
+   // Lên lịch phỏng vấn
+  scheduleInterview: async (data: InterviewScheduleData): Promise<{ message: string; interviewId: number }> => {
+    try {
+      
+      const response = await api.post('/interviews', data);
+    
+      return response.data;
+    } catch (error) {
+     
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const err = error as { response?: { data?: { error?: string } } };
+        if (err.response?.data?.error) {
+          throw new Error(err.response.data.error);
+        }
+      }
+      throw new Error('Không thể lên lịch phỏng vấn');
+    }
+  },
+
+   // Lấy tất cả phỏng vấn
+  getAllInterviews: async (): Promise<Interview[]> => {
+    try {
+      const response = await api.get('/interviews');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching interviews:', error);
+      throw new Error('Không thể tải danh sách phỏng vấn');
+    }
+  },
+  // Kiểm tra ứng viên đã được lên lịch phỏng vấn chưa
+  checkCandidateInterview: async (candidateId: string): Promise<{
+    hasScheduledInterview: boolean;
+    interview?: {
+      id: number;
+      date: string;
+      time: string;
+      status: string;
+      interviewer: string;
+      location: string;
+    };
+  }> => {
+    try {
+      const response = await api.get(`/interviews/check/${candidateId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking interview status:', error);
+      throw new Error('Không thể kiểm tra trạng thái phỏng vấn');
+    }
+  },
+
+  // Cập nhật trạng thái phỏng vấn
+  updateInterviewStatus: async (interviewId: string, status: string): Promise<{ message: string }> => {
+    try {
+      const response = await api.put(`/interviews/${interviewId}/status`, { status });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating interview status:', error);
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const err = error as { response?: { data?: { error?: string } } };
+        if (err.response?.data?.error) {
+          throw new Error(err.response.data.error);
+        }
+      }
+      throw new Error('Không thể cập nhật trạng thái phỏng vấn');
+    }
+  },
+  // Lấy lịch phỏng vấn theo ID
+  getInterviewById: async (interviewId: string): Promise<Interview> => {
+    try {
+      const response = await api.get(`/interviews/${interviewId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching interview:', error);
+      throw new Error('Không thể tải thông tin phỏng vấn');
+    }
+  },
+    // Cập nhật thông tin phỏng vấn
+  updateInterview: async (interviewId: string, data: Partial<InterviewScheduleData>): Promise<{ message: string }> => {
+    try {
+      const response = await api.put(`/interviews/${interviewId}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating interview:', error);
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const err = error as { response?: { data?: { error?: string } } };
+        if (err.response?.data?.error) {
+          throw new Error(err.response.data.error);
+        }
+      }
+      throw new Error('Không thể cập nhật thông tin phỏng vấn');
+    }
+  },
+
+  // Xóa phỏng vấn
+  deleteInterview: async (interviewId: string): Promise<{ message: string }> => {
+    try {
+      const response = await api.delete(`/interviews/${interviewId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting interview:', error);
+      if (typeof error === 'object' && error !== null && 'response' in error) {
+        const err = error as { response?: { data?: { error?: string } } };
+        if (err.response?.data?.error) {
+          throw new Error(err.response.data.error);
+        }
+      }
+      throw new Error('Không thể xóa lịch phỏng vấn');
+    }
   },
 };

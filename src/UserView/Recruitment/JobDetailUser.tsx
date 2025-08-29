@@ -112,8 +112,6 @@ const JobDetail: React.FC = () => {
     }
   };
 
-
-
   const fetchJobDetail = async (jobId: string) => {
     try {
       setLoading(true);
@@ -168,7 +166,7 @@ const JobDetail: React.FC = () => {
 
     try {
       const applications = await applicationsAPI.getUserApplications();
-     
+
       // SỬA: So sánh với jobId (theo Application type)
       const hasAppliedToJob = applications.some((app) => {
         const matches = String(app.job_id) === String(job.id);
@@ -362,7 +360,7 @@ const JobDetail: React.FC = () => {
                       </div>
                       <span>{job.location}</span>
                     </div>
-                  
+
                     <div className="flex items-center space-x-2">
                       <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                         <Calendar className="w-4 h-4 text-blue-600" />
@@ -549,19 +547,17 @@ const JobDetail: React.FC = () => {
                     {job.department}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-5 border-b border-gray-100 pb-3">
                   <div className="flex items-center space-x-3">
                     <MapPin className="w-5 h-5 text-gray-500" />
                     <span className="font-medium">Địa điểm:</span>
                   </div>
                   <span className="font-semibold text-gray-800">
-                    {job.location}
+                    {job.address}
                   </span>
                 </div>
               </div>
             </SidebarInfoCard>
-
-          
           </div>
         </div>
       </div>
