@@ -3,7 +3,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const router = express.Router();
-
+const { sendEmail } =require('./emailService')
 // Tạo thư mục uploads nếu chưa có
 const uploadsDir = path.join("D:", "CV_Storage", "uploaded_cvs");
 if (!fs.existsSync(uploadsDir)) {
@@ -65,6 +65,18 @@ router.post("/", upload.single("cv"), async (req, res) => {
         }
       );
     });
+        // Lấy thông tin job để gửi email
+    const jobInfo = await new Promise((resolve, reject) => {
+      req.db.query(
+        "SELECT title FROM jobs WHERE id = ?",
+        [jobId],
+        (err, results) => {
+          if (err) reject(err);
+          else resolve(results[0]);
+        }
+      );
+    });
+
 
     if (jobExists.length === 0) {
       return res.status(404).json({ error: "Không tìm thấy công việc" });
@@ -129,6 +141,11 @@ router.post("/", upload.single("cv"), async (req, res) => {
     res.status(201).json({
       message: "Ứng tuyển thành công!",
       applicationId: result.insertId,
+    });
+
+    sendEmail(email, "applicationReceived", {
+      candidateName: fullName,
+      jobTitle: jobInfo.title,
     });
   } catch (error) {
     console.error("Error submitting application:", error);
@@ -231,7 +248,7 @@ router.put("/:id/status", async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-
+ 
     const validStatuses = [
       "pending",
       "reviewing",
@@ -254,66 +271,155 @@ router.put("/:id/status", async (req, res) => {
       );
     });
 
+    // ✅ Lấy thông tin ứng viên và job để gửi email
+    if (status === 'accepted' || status === 'rejected') {
+      const applicationData = await new Promise((resolve, reject) => {
+        req.db.query(
+          `SELECT a.full_name, a.email, j.title as job_title
+           FROM applications a
+           JOIN jobs j ON a.job_id = j.id  
+           WHERE a.id = ?`,
+          [id],
+          (err, results) => {
+            if (err) reject(err);
+            else resolve(results[0]);
+          }
+        );
+      });
+
+      // Gửi email theo trạng thái
+      if (applicationData) {
+        const emailData = {
+          candidateName: applicationData.full_name,
+          jobTitle: applicationData.job_title
+        };
+
+        if (status === 'accepted') {
+          sendEmail(applicationData.email, 'applicationAccepted', emailData)
+            .catch(error => console.error('Failed to send acceptance email:', error));
+        } else if (status === 'rejected') {
+          sendEmail(applicationData.email, 'applicationRejected', emailData)
+            .catch(error => console.error('Failed to send rejection email:', error));
+        }
+      }
+    }
     res.json({ message: "Cập nhật trạng thái thành công" });
   } catch (error) {
     console.error("Error updating application status:", error);
     res.status(500).json({ error: "Không thể cập nhật trạng thái" });
   }
 });
-// GET /api/applications/download-cv/:applicationId - Download CV
-// ...existing code...
+
 // GET /api/applications/download-cv/:applicationId - Download CV
 router.get("/download-cv/:applicationId", async (req, res) => {
   try {
     const { applicationId } = req.params;
+    console.log("Download CV request for application:", applicationId);
+
+    // Lấy thông tin file từ database
     const application = await new Promise((resolve, reject) => {
       req.db.query(
-        "SELECT * FROM applications WHERE id = ?",
+        "SELECT cv_filename, cv_path FROM applications WHERE id = ?",
         [applicationId],
         (err, results) => {
-          if (err) reject(err);
-          else resolve(results);
+          if (err) {
+            reject(err);
+          } else {
+            resolve(results);
+          }
         }
       );
     });
 
     if (application.length === 0) {
+      console.log("Application not found for ID:", applicationId);
       return res.status(404).json({ error: "Không tìm thấy đơn ứng tuyển" });
     }
 
-    const app = application[0];
+    const { cv_filename, cv_path } = application[0];
+    console.log("CV filename:", cv_filename);
+    console.log("CV path:", cv_path);
 
-    // Xử lý đường dẫn file - kiểm tra cả đường dẫn cũ và mới
-    let filePath = app.cv_path;
+    // Xây dựng đường dẫn file
+    const uploadsDir = path.join("D:", "CV_Storage", "uploaded_cvs");
+    const filePath = path.join(uploadsDir, cv_filename);
 
-    // Nếu file không tồn tại ở đường dẫn trong DB, thử đường dẫn mới
+    console.log("Full file path:", filePath);
+
+    // Kiểm tra file có tồn tại không
     if (!fs.existsSync(filePath)) {
-      // Thử đường dẫn mới nếu file không tồn tại ở đường dẫn cũ
-      const newPath = path.join(uploadsDir, app.cv_filename);
-      if (fs.existsSync(newPath)) {
-        filePath = newPath;
+      console.error("File not found at path:", filePath);
+
+      // Kiểm tra thư mục có tồn tại không
+      if (!fs.existsSync(uploadsDir)) {
+        console.error("Uploads directory does not exist:", uploadsDir);
       } else {
-        return res.status(404).json({ error: "File CV không tồn tại" });
+        // List files trong thư mục để debug
+        const files = fs.readdirSync(uploadsDir);
+        console.log("Files in uploads directory:", files);
       }
+
+      return res.status(404).json({ error: "File CV không tồn tại" });
     }
-    const filename = app.cv_filename;
 
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Length", fs.statSync(filePath).size);
+    // Lấy thông tin file
+    const stats = fs.statSync(filePath);
+    console.log("File stats:", {
+      size: stats.size,
+      isFile: stats.isFile(),
+      modified: stats.mtime,
+    });
 
-    // Stream file để tránh load toàn bộ vào memory
+    // Xác định MIME type dựa trên extension
+    const ext = path.extname(cv_filename).toLowerCase();
+    let mimeType = "application/octet-stream";
+
+    switch (ext) {
+      case ".pdf":
+        mimeType = "application/pdf";
+        break;
+      case ".doc":
+        mimeType = "application/msword";
+        break;
+      case ".docx":
+        mimeType =
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        break;
+    }
+
+    console.log("MIME type:", mimeType);
+
+    // Set headers
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${cv_filename}"`
+    );
+    res.setHeader("Content-Type", mimeType);
+    res.setHeader("Content-Length", stats.size);
+    res.setHeader("Cache-Control", "no-cache");
+
+    console.log("Headers set, starting file stream...");
+
+    // Stream file
     const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
+
     fileStream.on("error", (error) => {
-      console.error("Error streaming file:", error);
+      console.error("File stream error:", error);
       if (!res.headersSent) {
-        res.status(500).json({ error: "Không thể tải file CV" });
+        res.status(500).json({ error: "Lỗi khi đọc file CV" });
       }
     });
+
+    fileStream.on("end", () => {
+      console.log("File stream completed");
+    });
+
+    fileStream.pipe(res);
   } catch (error) {
     console.error("Error downloading CV:", error);
-    res.status(500).json({ error: "Không thể tải file CV" });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Không thể tải file CV" });
+    }
   }
 });
 
@@ -324,7 +430,7 @@ router.get("/candidates", async (req, res) => {
       req.db.query(
         `
        SELECT 
-          CONCAT('candidate-', MD5(a.email)) as id,
+        a.user_id as id,
           a.full_name,
           a.email,
           a.phone,
@@ -333,7 +439,7 @@ router.get("/candidates", async (req, res) => {
           (
             SELECT status 
             FROM applications a2 
-            WHERE a2.email = a.email 
+             WHERE a2.user_id = a.user_id 
             ORDER BY a2.submitted_at DESC 
             LIMIT 1
           ) as status,
@@ -341,29 +447,32 @@ router.get("/candidates", async (req, res) => {
           (
             SELECT cv_filename 
             FROM applications a3 
-            WHERE a3.email = a.email 
+             WHERE a3.user_id = a.user_id
             ORDER BY a3.submitted_at DESC 
             LIMIT 1
           ) as cv_filename,
           (
             SELECT id 
             FROM applications a4 
-            WHERE a4.email = a.email 
+            WHERE a4.user_id = a.user_id
             ORDER BY a4.submitted_at DESC 
             LIMIT 1
           ) as latest_application_id
         FROM applications a
         JOIN jobs j ON a.job_id = j.id
-        GROUP BY a.email, a.full_name, a.phone
+        GROUP BY a.user_id, a.full_name, a.phone,a.email
         ORDER BY latest_application_date DESC
       `,
         (err, results) => {
           if (err) reject(err);
           else {
-            const processedResults = results.map(row => ({
+            const processedResults = results.map((row) => ({
               ...row,
-              job_titles: row.job_titles_raw ? row.job_titles_raw.split(',') : [],
-              job_titles_raw: undefined // Remove raw field
+              id: row.id.toString(),
+              job_titles: row.job_titles_raw
+                ? row.job_titles_raw.split(",")
+                : [],
+              job_titles_raw: undefined, // Remove raw field
             }));
             resolve(processedResults);
           }
