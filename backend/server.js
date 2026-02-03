@@ -38,8 +38,8 @@ app.use(
     resave: false,
     saveUninitialized: true,
     cookie: {
-      sameSite: "lax",
-      secure: false,
+      sameSite: "none",
+      secure: true,
     },
   })
 );
@@ -63,7 +63,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "https://manage-recruitment-api.vercel.app",
+      callbackURL: "https://manage-recruitment-api.vercel.app/auth/google/callback",
     },
     (accessToken, refreshToken, profile, done) => {
       const googleId = profile.id;
