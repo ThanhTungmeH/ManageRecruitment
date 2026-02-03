@@ -24,7 +24,7 @@ const db = mysql.createConnection({
 
 // CORS configuration
 const corsOptions = {
-  origin: "http://localhost:5173",
+  origin: "https://manage-recruitment.vercel.app",
   credentials: true,
 };
 
@@ -142,7 +142,7 @@ app.get(
   "/auth/google/callback",
   passport.authenticate("google", { failureRedirect: "/" }),
   (req, res) => {
-    res.redirect("http://localhost:5173");
+    res.redirect("https://manage-recruitment.vercel.app");
   }
 );
 
