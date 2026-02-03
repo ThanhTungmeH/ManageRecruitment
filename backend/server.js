@@ -419,7 +419,7 @@ app.get("/logout", (req, res) => {
 const startServer = async () => {
   try {
     // Khởi tạo email transporter
-    await initializeTransporter();
+
     console.log('✅ Email service initialized');
     
     // Start server
@@ -430,6 +430,9 @@ const startServer = async () => {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
+    initializeTransporter()
+  .then(() => console.log("✅ Email service initialized"))
+  .catch(err => console.error("⚠️ Email disabled:", err.message));
 };
 
 startServer();
