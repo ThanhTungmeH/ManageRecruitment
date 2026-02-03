@@ -271,7 +271,7 @@ const Header = () => {
 
             <button
               onClick={() =>
-                (window.location.href = "http://localhost:3001/auth/google")
+                (window.location.href = "https://manage-recruitment-api.vercel.app/auth/google")
               }
               className="w-full py-2 mb-4 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center"
             >
